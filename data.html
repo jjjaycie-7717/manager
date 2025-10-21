@@ -610,6 +610,9 @@
             
             // 模拟导出过程
             setTimeout(() => {
+                // 生成Excel文件
+                generateExcelFile(type, reportType);
+                
                 let message = '';
                 switch(type) {
                     case 'completed':
@@ -628,6 +631,117 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             }, 2000);
+        }
+
+        // 生成Excel文件
+        function generateExcelFile(type, reportType) {
+            // 获取员工数据
+            const employeeData = getEmployeeData(type);
+            
+            // 创建Excel内容
+            const excelContent = createExcelContent(employeeData, type, reportType);
+            
+            // 下载文件
+            downloadExcelFile(excelContent, type, reportType);
+        }
+
+        // 获取员工数据
+        function getEmployeeData(type) {
+            const employeeCards = document.querySelectorAll('.space-y-4 > .bg-white');
+            const employees = [];
+            
+            employeeCards.forEach(card => {
+                const nameElement = card.querySelector('h4');
+                const positionElement = card.querySelector('p');
+                const statusElement = card.querySelector('.text-lg.font-bold');
+                const completionElement = card.querySelector('.text-sm.text-gray-500');
+                
+                if (nameElement && positionElement) {
+                    const name = nameElement.textContent.trim();
+                    const position = positionElement.textContent.trim();
+                    const status = statusElement ? statusElement.textContent.trim() : '';
+                    const completion = completionElement ? completionElement.textContent.trim() : '';
+                    
+                    // 根据导出类型筛选数据
+                    let shouldInclude = false;
+                    switch(type) {
+                        case 'completed':
+                            shouldInclude = status.includes('100%') || completion.includes('100%');
+                            break;
+                        case 'incomplete':
+                            shouldInclude = !status.includes('100%') && !completion.includes('100%');
+                            break;
+                        case 'all':
+                            shouldInclude = true;
+                            break;
+                    }
+                    
+                    if (shouldInclude) {
+                        employees.push({
+                            name: name,
+                            position: position,
+                            status: status,
+                            completion: completion
+                        });
+                    }
+                }
+            });
+            
+            return employees;
+        }
+
+        // 创建Excel内容
+        function createExcelContent(employees, type, reportType) {
+            const headers = ['姓名', '工号', '门店', '完成状态', '统计周期'];
+            const rows = employees.map(emp => {
+                const parts = emp.position.split(' | ');
+                const empId = parts[0] || '';
+                const store = parts[1] || '';
+                
+                return [
+                    emp.name,
+                    empId,
+                    store,
+                    emp.completion.includes('100%') ? '已完成' : '未完成',
+                    reportType
+                ];
+            });
+            
+            // 创建CSV格式内容
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+            ].join('\n');
+            
+            return csvContent;
+        }
+
+        // 下载Excel文件
+        function downloadExcelFile(content, type, reportType) {
+            // 创建BOM头，确保Excel正确显示中文
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + content], { 
+                type: 'text/csv;charset=utf-8;' 
+            });
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            
+            // 生成文件名
+            const today = new Date().toISOString().slice(0, 10);
+            const fileName = `${type === 'completed' ? '已完成' : type === 'incomplete' ? '未完成' : '全部'}名单_${reportType}_${today}.csv`;
+            link.setAttribute('download', fileName);
+            
+            // 触发下载
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 释放URL对象
+            URL.revokeObjectURL(url);
         }
 
         // 下载报表
